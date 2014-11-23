@@ -589,8 +589,8 @@ document or null."
                           (pooler:fetch-from (db-connection-pool *couchdb*)))))
     (multiple-value-bind (body status headers ouri stream must-close reason-phrase)
         (apply #'drakma:http-request (if parameters
-                                         (cat uri (format-parameters parameters)
-                                              uri))
+                                         (cat uri (format-parameters parameters))
+                                         uri)
                `(,@(remove-keyword-from-list args :parameters)
                    :preserve-uri t
                    ,@(when (db-user *couchdb*)
