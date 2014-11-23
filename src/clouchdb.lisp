@@ -566,22 +566,39 @@ document or null."
 ;;
 ;;
 
-(defun db-request (uri &rest args &key &allow-other-keys)
+(defun remove-keyword-from-list (arg-list keyword)
+  (loop
+     for (key value) on arg-list by #'cddr
+     unless (eq key keyword)
+     nconc (list key value)))
+
+(defun format-parameters (parameters)
+  (with-output-to-string (s)
+    (loop
+       for first = t then nil
+       for v in parameters
+       do (format s "~a~a=~a" (if first "?" "&") (url-encode (car v)) (url-encode (cdr v))))))
+
+(defun db-request (uri &rest args &key parameters &allow-other-keys)
   "Used by most Clouchdb APIs to make the actual REST request."
   (let* ((drakma:*text-content-types* *text-types*)
+         (uri (make-uri uri))
          (want-stream (getf args :want-stream))
          (connection (and *use-pool*
                           (not want-stream)
                           (pooler:fetch-from (db-connection-pool *couchdb*)))))
     (multiple-value-bind (body status headers ouri stream must-close reason-phrase)
-        (apply #'drakma:http-request (make-uri uri)
-               `(,@args :basic-authorization
-                        ,(when (db-user *couchdb*)
-                               (list (db-user *couchdb*)
-                                     (db-password *couchdb*)))
-                        ,@(when connection
-                                (list :stream (http-connection-stream connection)
-                                      :close nil))))
+        (apply #'drakma:http-request (if parameters
+                                         (cat uri (format-parameters parameters)
+                                              uri))
+               `(,@(remove-keyword-from-list args :parameters)
+                   :preserve-uri t
+                   ,@(when (db-user *couchdb*)
+                           (list :basic-authorization (list (db-user *couchdb*)
+                                                            (db-password *couchdb*))))
+                   ,@(when connection
+                           (list :stream (http-connection-stream connection)
+                                 :close nil))))
       (declare (ignore ouri))
       (unwind-protect
            (progn
