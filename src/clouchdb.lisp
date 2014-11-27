@@ -1066,7 +1066,7 @@ the :ID property."
                            :external-format-out +utf-8+
                            :content-length nil
                            :method :post
-                           :content (document-to-json 
+                           :content (document-to-json
                                      (document-update-notify 
                                       (db-document-update-fn *couchdb*) 
                                       doc))))))

@@ -68,6 +68,7 @@
   (cond
     ((null symbol) (write-json-chars "null" stream))
     ((eq 't symbol) (write-json-chars "true" stream))
+    ((eq 'json-false symbol) (write-json-chars "false" stream))
     (t (write-json-string (as-field-name-string symbol) stream))))
 
 (defun keyword-assocp (e)
