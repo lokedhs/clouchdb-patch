@@ -106,4 +106,6 @@
    :with-attachment
    :with-connection
    :with-temp-db
-   :json-false))
+   :json-false
+   :json-map
+   :json-list))
