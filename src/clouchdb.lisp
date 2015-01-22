@@ -579,6 +579,8 @@ document or null."
        for v in parameters
        do (format s "~a~a=~a" (if first "?" "&") (url-encode (car v)) (url-encode (cdr v))))))
 
+(defvar *transform-fn* nil)
+
 (defun db-request (uri &rest args &key parameters &allow-other-keys)
   "Used by most Clouchdb APIs to make the actual REST request."
   (let* ((drakma:*text-content-types* *text-types*)
@@ -607,7 +609,7 @@ document or null."
 status: ~s~%headers: ~s~%stream:~s~%body:~s~%" 
                        uri args must-close reason-phrase status headers stream body))
              (if (stringp body) 
-                 (values (json-to-document body) status)
+                 (values (funcall (or *transform-fn* #'json-to-document) body) status)
                  (values body status reason-phrase)))
         (unless want-stream
           (if must-close
@@ -989,6 +991,30 @@ one."
                   (t (error 'document-missing :id doc-id))))
 	  (document-update-notify 
            (db-document-fetch-fn *couchdb*) res)))))
+
+(defun get-document-json (id &key revision revisions conflicts revision-info)
+  (unless id
+    (error 'id-missing))
+  (let ((parameters)
+        (doc-id (document-id id)))
+    (when conflicts (push (cons "conflicts" "true") parameters))
+    (when revision
+      (push (cons "rev" (value-as-string revision)) parameters))
+    (when revisions
+      (push (cons "revs" "true") parameters))
+    (when revision-info
+      (push (cons "revs_info" "true") parameters))
+    (let ((res (let ((*transform-fn* #'st-json:read-json-from-string))
+                 (db-request (cat (url-encode 
+                                   (db-name *couchdb*)) 
+                                  "/" 
+                                  (url-encode doc-id))
+                             :method :get 
+                             :parameters parameters))))
+      (when (st-json:getjso "error" res)
+        (error 'document-missing :id doc-id))
+      (print res)
+      res)))
 		      
 (defun encode-file (file)
   "Encode a file in the format suitable for CouchDb attachments"

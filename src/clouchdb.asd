@@ -42,7 +42,8 @@
                :parenscript
                :s-base64
                :flexi-streams
-               :pooler)
+               :pooler
+               :st-json)
   :components ((:file "package")
                (:file "clouchdb")
                (:file "decoder")

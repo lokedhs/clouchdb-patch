@@ -107,5 +107,6 @@
    :with-connection
    :with-temp-db
    :json-false
+   :get-document-json
    :json-map
    :json-list))
