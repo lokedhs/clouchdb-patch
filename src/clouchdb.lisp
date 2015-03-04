@@ -581,23 +581,6 @@ document or null."
 
 (defvar *transform-fn* nil)
 
-(defun http-request-with-reconnect (connection drakma-params)
-  (labels ((simple-drakma-call ()
-             (apply #'drakma:http-request drakma-params)))
-    (if connection
-        (handler-case
-            (apply #'drakma:http-request
-                   (append drakma-params
-                           (list :stream (http-connection-stream connection)
-                                 :close nil)))
-          (drakma::drakma-simple-error (condition)
-            (log:error "Connection error: ~s, reconnecting. Params: ~s" (princ-to-string condition) drakma-params)
-            (ignore-errors
-              (close (http-connection-stream connection)))
-            (simple-drakma-call)))
-        ;; ELSE: No connection reuse
-        (simple-drakma-call))))
-
 (defun db-request (uri &rest args &key parameters &allow-other-keys)
   "Used by most Clouchdb APIs to make the actual REST request."
   (let* ((drakma:*text-content-types* *text-types*)
@@ -606,35 +589,53 @@ document or null."
          (connection (and *use-pool*
                           (not want-stream)
                           (pooler:fetch-from (db-connection-pool *couchdb*)))))
-    (multiple-value-bind (body status headers ouri stream must-close reason-phrase)
-        (http-request-with-reconnect connection
-                                     `(,(if parameters
-                                            (cat uri (format-parameters parameters))
-                                            uri)
-                                        ,@(remove-keyword-from-list args :parameters)
-                                        :preserve-uri t
-                                        ,@(when (db-user *couchdb*)
-                                                (list :basic-authorization (list (db-user *couchdb*)
-                                                                                 (db-password *couchdb*))))))
-      (declare (ignore ouri))
-      (unwind-protect
-           (progn
-             (when *debug-requests*
-               (format t "uri: ~s~%args: ~s~%must-close:~s~%reason-phrase: ~s~%
+    (labels ((http-request-with-reconnect (drakma-params)
+               (labels ((simple-drakma-call ()
+                          (apply #'drakma:http-request drakma-params)))
+                 (if connection
+                     (handler-case
+                         (apply #'drakma:http-request
+                                (append drakma-params
+                                        (list :stream (http-connection-stream connection)
+                                              :close nil)))
+                       (drakma::drakma-simple-error (condition)
+                         (log:error "Connection error: ~s, reconnecting. Params: ~s" (princ-to-string condition) drakma-params)
+                         (let ((conn (http-connection-stream connection)))
+                           (when conn
+                             (ignore-errors
+                               (close conn))))
+                         (setf connection nil)
+                         (simple-drakma-call)))
+                     ;; ELSE: No connection reuse
+                     (simple-drakma-call)))))
+      (multiple-value-bind (body status headers ouri stream must-close reason-phrase)
+          (http-request-with-reconnect `(,(if parameters
+                                              (cat uri (format-parameters parameters))
+                                              uri)
+                                          ,@(remove-keyword-from-list args :parameters)
+                                          :preserve-uri t
+                                          ,@(when (db-user *couchdb*)
+                                                  (list :basic-authorization (list (db-user *couchdb*)
+                                                                                   (db-password *couchdb*))))))
+        (declare (ignore ouri))
+        (unwind-protect
+             (progn
+               (when *debug-requests*
+                 (format t "uri: ~s~%args: ~s~%must-close:~s~%reason-phrase: ~s~%
 status: ~s~%headers: ~s~%stream:~s~%body:~s~%" 
-                       uri args must-close reason-phrase status headers stream body))
-             (if (stringp body) 
-                 (values (funcall (or *transform-fn* #'json-to-document) body) status)
-                 (values body status reason-phrase)))
-        (unless want-stream
-          (if must-close
-              ;; If the connection must be closed, then we can simply drop the
-              ;; pooled connection.
-              (close stream)
-              ;; ELSE preserve the cached connection and return the object to the pool
-              (when connection
-                (setf (http-connection-stream connection) stream)
-                (pooler:return-to (db-connection-pool *couchdb*) connection))))))))
+                         uri args must-close reason-phrase status headers stream body))
+               (if (stringp body) 
+                   (values (funcall (or *transform-fn* #'json-to-document) body) status)
+                   (values body status reason-phrase)))
+          (unless want-stream
+            (if must-close
+                ;; If the connection must be closed, then we can simply drop the
+                ;; pooled connection.
+                (close stream)
+                ;; ELSE preserve the cached connection and return the object to the pool
+                (when connection
+                  (setf (http-connection-stream connection) stream)
+                  (pooler:return-to (db-connection-pool *couchdb*) connection)))))))))
 
 (defun make-db (&key host port name protocol 
                   (user nil user-supplied-p) 
