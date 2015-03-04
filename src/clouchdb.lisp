@@ -581,6 +581,23 @@ document or null."
 
 (defvar *transform-fn* nil)
 
+(defun http-request-with-reconnect (connection drakma-params)
+  (labels ((simple-drakma-call ()
+             (apply #'drakma:http-request drakma-params)))
+    (if connection
+        (handler-case
+            (apply #'drakma:http-request
+                   (append drakma-params
+                           (list :stream (http-connection-stream connection)
+                                 :close nil)))
+          (drakma::drakma-simple-error (condition)
+            (log:error "Connection error: ~s, reconnecting. Params: ~s" (princ-to-string condition) drakma-params)
+            (ignore-errors
+              (close (http-connection-stream connection)))
+            (simple-drakma-call)))
+        ;; ELSE: No connection reuse
+        (simple-drakma-call))))
+
 (defun db-request (uri &rest args &key parameters &allow-other-keys)
   "Used by most Clouchdb APIs to make the actual REST request."
   (let* ((drakma:*text-content-types* *text-types*)
@@ -590,17 +607,15 @@ document or null."
                           (not want-stream)
                           (pooler:fetch-from (db-connection-pool *couchdb*)))))
     (multiple-value-bind (body status headers ouri stream must-close reason-phrase)
-        (apply #'drakma:http-request (if parameters
-                                         (cat uri (format-parameters parameters))
-                                         uri)
-               `(,@(remove-keyword-from-list args :parameters)
-                   :preserve-uri t
-                   ,@(when (db-user *couchdb*)
-                           (list :basic-authorization (list (db-user *couchdb*)
-                                                            (db-password *couchdb*))))
-                   ,@(when connection
-                           (list :stream (http-connection-stream connection)
-                                 :close nil))))
+        (http-request-with-reconnect connection
+                                     `(,(if parameters
+                                            (cat uri (format-parameters parameters))
+                                            uri)
+                                        ,@(remove-keyword-from-list args :parameters)
+                                        :preserve-uri t
+                                        ,@(when (db-user *couchdb*)
+                                                (list :basic-authorization (list (db-user *couchdb*)
+                                                                                 (db-password *couchdb*))))))
       (declare (ignore ouri))
       (unwind-protect
            (progn
