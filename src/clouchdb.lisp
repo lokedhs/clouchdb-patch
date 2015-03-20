@@ -599,7 +599,7 @@ document or null."
                                         (list :stream (http-connection-stream connection)
                                               :close nil)))
                        (drakma::drakma-simple-error (condition)
-                         (log:error "Connection error: ~s, reconnecting. Params: ~s" (princ-to-string condition) drakma-params)
+                         (log:error "Connection error: ~a, reconnecting. Params: ~s" condition drakma-params)
                          (let ((conn (http-connection-stream connection)))
                            (when conn
                              (ignore-errors
