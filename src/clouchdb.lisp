@@ -58,7 +58,7 @@
                     :capacity capacity
                     :item-maker #'(lambda () (make-instance 'http-connection))
                     :item-destroyer #'close-http-connection
-                    :timeout 30))
+                    :timeout 20))
 
 (defun make-default-db ()
   (new-db :host *default-host*
