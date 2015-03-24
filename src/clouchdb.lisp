@@ -57,7 +57,8 @@
   (pooler:make-pool :name "CouchDB http connection pool"
                     :capacity capacity
                     :item-maker #'(lambda () (make-instance 'http-connection))
-                    :item-destroyer #'close-http-connection))
+                    :item-destroyer #'close-http-connection
+                    :timeout 30))
 
 (defun make-default-db ()
   (new-db :host *default-host*
