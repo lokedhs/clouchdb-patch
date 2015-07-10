@@ -56,7 +56,10 @@
 (defun make-http-connection-pool (&key (capacity 20))
   (pooler:make-pool :name "CouchDB http connection pool"
                     :capacity capacity
-                    :item-maker #'(lambda () (make-instance 'http-connection))
+                    :item-maker (lambda ()
+                                  (handler-bind ((error (lambda (condition)
+                                                          (log:error "Error when creating couchdb connection: ~a" condition))))
+                                    (make-instance 'http-connection)))
                     :item-destroyer #'close-http-connection
                     :timeout 20))
 

@@ -43,7 +43,8 @@
                :s-base64
                :flexi-streams
                :pooler
-               :st-json)
+               :st-json
+               :log4cl)
   :components ((:file "package")
                (:file "clouchdb")
                (:file "decoder")
