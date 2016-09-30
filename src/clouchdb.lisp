@@ -607,7 +607,7 @@ document or null."
                          (let ((conn (http-connection-stream connection)))
                            (when conn
                              (ignore-errors
-                               (close conn))))
+                              (close conn))))
                          (setf connection nil)
                          (simple-drakma-call)))
                      ;; ELSE: No connection reuse
@@ -616,11 +616,12 @@ document or null."
           (http-request-with-reconnect `(,(if parameters
                                               (cat uri (format-parameters parameters))
                                               uri)
-                                          ,@(remove-keyword-from-list args :parameters)
-                                          :preserve-uri t
-                                          ,@(when (db-user *couchdb*)
-                                                  (list :basic-authorization (list (db-user *couchdb*)
-                                                                                   (db-password *couchdb*))))))
+                                         ,@(remove-keyword-from-list args :parameters)
+                                         :preserve-uri t
+                                         :external-format-in :utf-8
+                                         ,@(when (db-user *couchdb*)
+                                             (list :basic-authorization (list (db-user *couchdb*)
+                                                                              (db-password *couchdb*))))))
         (declare (ignore ouri))
         (unwind-protect
              (progn
